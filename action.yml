@@ -31,10 +31,17 @@ runs:
         promoted_files=$(echo "$promote_output" | grep -oP "Promoting .* to \K.*" || true)
         
         if [[ -n "$promoted_files" ]]; then
-          echo "changes=true" >> $GITHUB_OUTPUT
-          # Save promoted files to a temporary file for the next step
-          echo "$promoted_files" > /tmp/promoted_files.txt
-          echo "Promoted files detected"
+          # Validate that we actually extracted some file paths
+          file_count=$(echo "$promoted_files" | wc -l)
+          if [[ $file_count -gt 0 ]]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            # Save promoted files to a workspace-relative temporary file
+            echo "$promoted_files" > promoted_files.txt
+            echo "Promoted $file_count file(s)"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No valid file paths extracted from promote output"
+          fi
         else
           echo "changes=false" >> $GITHUB_OUTPUT
           echo "No files to promote"
@@ -50,27 +57,37 @@ runs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
         # Read the promoted files list
-        if [[ -f /tmp/promoted_files.txt ]]; then
+        if [[ -f promoted_files.txt ]]; then
           echo "Files to be committed:"
-          cat /tmp/promoted_files.txt
+          cat promoted_files.txt
           
-          # Add only the promoted files
+          # Add only the promoted files, with validation
           while IFS= read -r file; do
             if [[ -n "$file" ]]; then
-              git add "$file"
+              # Validate that the file exists and is within the workspace
+              if [[ -f "$file" ]]; then
+                git add "$file"
+              else
+                echo "Warning: File not found or not accessible: $file"
+              fi
             fi
-          done < /tmp/promoted_files.txt
+          done < promoted_files.txt
           
-          # Commit the changes
-          git commit -m "Auto-promote dune test changes"
-          
-          # Push to the current branch
-          git push origin HEAD
-          
-          echo "Changes committed and pushed successfully"
+          # Check if there are files staged for commit
+          if git diff --cached --quiet; then
+            echo "No files were staged for commit"
+          else
+            # Commit the changes
+            git commit -m "Auto-promote dune test changes"
+            
+            # Push to the current branch
+            git push origin HEAD
+            
+            echo "Changes committed and pushed successfully"
+          fi
           
           # Clean up
-          rm -f /tmp/promoted_files.txt
+          rm -f promoted_files.txt
         fi
 
 branding:
