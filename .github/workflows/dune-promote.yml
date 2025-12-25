@@ -9,6 +9,9 @@ jobs:
     # Only run on PR comments with the trigger phrase
     if: github.event.issue.pull_request && contains(github.event.comment.body, '!dune-promote')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     
     steps:
       - name: Get PR branch

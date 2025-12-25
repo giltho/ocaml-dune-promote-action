@@ -44,7 +44,7 @@ runs:
         git commit -m "Auto-promote dune test changes"
         
         # Push to the current branch
-        git push
+        git push origin HEAD
         
         echo "Changes committed and pushed successfully"
 

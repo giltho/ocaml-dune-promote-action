@@ -27,6 +27,9 @@ jobs:
     # Only run on PR comments with the trigger phrase
     if: github.event.issue.pull_request && contains(github.event.comment.body, '!dune-promote')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     
     steps:
       - name: Get PR branch
@@ -50,7 +53,7 @@ jobs:
         run: opam install . --deps-only --with-test
       
       - name: Run Dune Promote
-        uses: giltho/ocaml-dune-promote-action@v1
+        uses: giltho/ocaml-dune-promote-action@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -78,7 +81,8 @@ The action will automatically run `dune test --auto-promote`, commit any changes
    - Runs `dune test --auto-promote`
    - Detects any file changes
    - Commits and pushes the changes back to the PR
-   - Posts a success comment
+
+The example workflow also posts a success comment on the PR after the action completes.
 
 ## Requirements
 
