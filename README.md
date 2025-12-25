@@ -80,9 +80,11 @@ The action will automatically run `dune test --auto-promote`, commit any changes
    - Sets up the OCaml environment
    - Runs `dune test --auto-promote`
    - Detects any file changes
-   - Commits and pushes the changes back to the PR
+   - Commits and pushes the changes back to the PR (including new files created by dune promote)
 
 The example workflow also posts a success comment on the PR after the action completes.
+
+**Note**: The action uses `git add -A` to include both modified and newly created files, as dune promote may generate new test output files. Ensure your `.gitignore` is properly configured to exclude build artifacts and sensitive files.
 
 ## Requirements
 
