@@ -1,0 +1,90 @@
+name: 'Dune Promote Action'
+description: 'Automatically run dune promote and commit only the promoted files'
+author: 'giltho'
+
+inputs:
+  github-token:
+    description: 'GitHub token for committing and pushing changes'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run dune test and capture failures
+      shell: bash
+      run: |
+        echo "Running dune test..."
+        # Run tests and let them fail - we'll promote after
+        dune test || echo "Tests completed, checking for files to promote..."
+        
+    - name: Run dune promote and capture promoted files
+      id: promote
+      shell: bash
+      run: |
+        echo "Running dune promote..."
+        # Run dune promote and capture the output
+        promote_output=$(dune promote 2>&1)
+        echo "$promote_output"
+        
+        # Extract promoted files from the output
+        # dune promote outputs lines like: "Promoting _build/default/path/file.output to path/file.expected"
+        # Use sed for better portability
+        promoted_files=$(echo "$promote_output" | sed -n 's/.*Promoting .* to \(.*\)/\1/p')
+        
+        if [[ -n "$promoted_files" ]]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          # Save promoted files to a workspace-relative temporary file
+          echo "$promoted_files" > promoted_files.txt
+          file_count=$(echo "$promoted_files" | wc -w)
+          echo "Promoted $file_count file(s)"
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "No files to promote"
+        fi
+        
+    - name: Commit and push promoted files
+      if: steps.promote.outputs.changes == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Read the promoted files list
+        if [[ -f promoted_files.txt ]]; then
+          echo "Files to be committed:"
+          cat promoted_files.txt
+          
+          # Add only the promoted files, with validation
+          while IFS= read -r file; do
+            if [[ -n "$file" ]]; then
+              # Validate that the file exists and is within the workspace
+              if [[ -f "$file" ]]; then
+                git add "$file"
+              else
+                echo "Warning: File not found or not accessible: $file"
+              fi
+            fi
+          done < promoted_files.txt
+          
+          # Check if there are files staged for commit
+          if ! git diff --cached --quiet; then
+            # Commit the changes
+            git commit -m "Auto-promote dune test changes"
+            
+            # Push to the current branch
+            git push origin HEAD
+            
+            echo "Changes committed and pushed successfully"
+          else
+            echo "No files were staged for commit"
+          fi
+          
+          # Clean up
+          rm -f promoted_files.txt
+        fi
+
+branding:
+  icon: 'check-circle'
+  color: 'orange'
