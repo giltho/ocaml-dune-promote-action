@@ -1,0 +1,49 @@
+name: Dune Promote on Comment
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  dune-promote:
+    # Only run on PR comments with the trigger phrase
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '!dune-promote')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get PR branch
+        id: pr-branch
+        uses: xt0rted/pull-request-comment-branch@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-branch.outputs.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.14.x
+      
+      - name: Install dependencies
+        run: opam install . --deps-only --with-test
+      
+      - name: Run Dune Promote
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Comment on PR
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Dune promote completed successfully!'
+            })

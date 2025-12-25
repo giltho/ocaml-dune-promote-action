@@ -1,0 +1,53 @@
+name: 'Dune Promote Action'
+description: 'Automatically run dune test --auto-promote and commit the changes'
+author: 'giltho'
+
+inputs:
+  github-token:
+    description: 'GitHub token for committing and pushing changes'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run dune test --auto-promote
+      shell: bash
+      run: |
+        echo "Running dune test --auto-promote..."
+        dune test --auto-promote || true
+        
+    - name: Check for changes
+      id: check-changes
+      shell: bash
+      run: |
+        if [[ -n $(git status --porcelain) ]]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+          echo "Changes detected after dune promote"
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+          echo "No changes detected"
+        fi
+        
+    - name: Commit and push changes
+      if: steps.check-changes.outputs.changes == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Add all modified files
+        git add -A
+        
+        # Commit the changes
+        git commit -m "Auto-promote dune test changes"
+        
+        # Push to the current branch
+        git push
+        
+        echo "Changes committed and pushed successfully"
+
+branding:
+  icon: 'check-circle'
+  color: 'orange'
