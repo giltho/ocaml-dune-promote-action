@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: opam install . --deps-only --with-test
       
+      # NOTE: This workflow uses './' to test the action in this repository.
+      # In your own repository, use a pinned version like:
+      # uses: giltho/ocaml-dune-promote-action@v1
       - name: Run Dune Promote
         uses: ./
         with:

@@ -53,10 +53,24 @@ jobs:
         run: opam install . --deps-only --with-test
       
       - name: Run Dune Promote
-        uses: giltho/ocaml-dune-promote-action@main
+        uses: giltho/ocaml-dune-promote-action@v1  # Pin to a specific version tag
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Comment on PR
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Dune promote completed successfully!'
+            })
 ```
+
+**Important Security Note**: Always pin the action to a specific version tag (e.g., `@v1`, `@v1.0.0`) or commit SHA in your workflow. Do not use `@main` or `./` in production workflows triggered by PR comments, as this could allow untrusted code execution if a malicious PR modifies the action code.
 
 2. To trigger the action, comment on a PR with:
    ```
@@ -99,6 +113,23 @@ The workflow needs the following permissions:
 - `pull-requests: write` - to comment on PRs
 
 Make sure your `GITHUB_TOKEN` has these permissions in your workflow.
+
+## Security Considerations
+
+This action is designed to run on pull request code, which inherently involves some security considerations:
+
+1. **Pin to specific versions**: Always reference this action using a specific version tag (e.g., `@v1`) or commit SHA, never use `@main` or `./` in production workflows triggered by PR comments.
+
+2. **Trusted repositories**: This action is most appropriate for repositories where PR authors are trusted (e.g., internal team repositories, or repos with strict PR review requirements).
+
+3. **Review before merging**: The action only commits the promoted test files; it doesn't automatically merge them. Reviewers should always check the promoted changes before merging the PR.
+
+4. **Limited scope**: The action only runs `dune test --auto-promote` and commits the results. It doesn't execute arbitrary code beyond what your test suite already does.
+
+If you're concerned about security, consider:
+- Requiring PR approval before the action can be triggered
+- Using CODEOWNERS to control who can approve PRs
+- Limiting who can trigger the action by checking the commenter's permissions in the workflow
 
 ## License
 
