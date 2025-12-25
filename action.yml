@@ -28,20 +28,15 @@ runs:
         
         # Extract promoted files from the output
         # dune promote outputs lines like: "Promoting _build/default/path/file.output to path/file.expected"
-        promoted_files=$(echo "$promote_output" | grep -oP "Promoting .* to \K.*" || true)
+        # Use sed for better portability
+        promoted_files=$(echo "$promote_output" | sed -n 's/.*Promoting .* to \(.*\)/\1/p')
         
         if [[ -n "$promoted_files" ]]; then
-          # Validate that we actually extracted some file paths
-          file_count=$(echo "$promoted_files" | wc -l)
-          if [[ $file_count -gt 0 ]]; then
-            echo "changes=true" >> $GITHUB_OUTPUT
-            # Save promoted files to a workspace-relative temporary file
-            echo "$promoted_files" > promoted_files.txt
-            echo "Promoted $file_count file(s)"
-          else
-            echo "changes=false" >> $GITHUB_OUTPUT
-            echo "No valid file paths extracted from promote output"
-          fi
+          echo "changes=true" >> $GITHUB_OUTPUT
+          # Save promoted files to a workspace-relative temporary file
+          echo "$promoted_files" > promoted_files.txt
+          file_count=$(echo "$promoted_files" | wc -w)
+          echo "Promoted $file_count file(s)"
         else
           echo "changes=false" >> $GITHUB_OUTPUT
           echo "No files to promote"
@@ -74,9 +69,7 @@ runs:
           done < promoted_files.txt
           
           # Check if there are files staged for commit
-          if git diff --cached --quiet; then
-            echo "No files were staged for commit"
-          else
+          if ! git diff --cached --quiet; then
             # Commit the changes
             git commit -m "Auto-promote dune test changes"
             
@@ -84,6 +77,8 @@ runs:
             git push origin HEAD
             
             echo "Changes committed and pushed successfully"
+          else
+            echo "No files were staged for commit"
           fi
           
           # Clean up
