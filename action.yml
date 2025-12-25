@@ -1,5 +1,5 @@
 name: 'Dune Promote Action'
-description: 'Automatically run dune test --auto-promote and commit the changes'
+description: 'Automatically run dune promote and commit only the promoted files'
 author: 'giltho'
 
 inputs:
@@ -10,28 +10,38 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Run dune test --auto-promote
+    - name: Run dune test and capture failures
       shell: bash
       run: |
-        echo "Running dune test --auto-promote..."
-        # dune test --auto-promote may exit with non-zero if tests fail before promotion
-        # We capture the exit code but don't fail the step
-        dune test --auto-promote || { exit_code=$?; echo "Tests completed with exit code $exit_code, checking for promoted changes..."; }
+        echo "Running dune test..."
+        # Run tests and let them fail - we'll promote after
+        dune test || echo "Tests completed, checking for files to promote..."
         
-    - name: Check for changes
-      id: check-changes
+    - name: Run dune promote and capture promoted files
+      id: promote
       shell: bash
       run: |
-        if [[ -n $(git status --porcelain) ]]; then
+        echo "Running dune promote..."
+        # Run dune promote and capture the output
+        promote_output=$(dune promote 2>&1)
+        echo "$promote_output"
+        
+        # Extract promoted files from the output
+        # dune promote outputs lines like: "Promoting _build/default/path/file.output to path/file.expected"
+        promoted_files=$(echo "$promote_output" | grep -oP "Promoting .* to \K.*" || true)
+        
+        if [[ -n "$promoted_files" ]]; then
           echo "changes=true" >> $GITHUB_OUTPUT
-          echo "Changes detected after dune promote"
+          # Save promoted files to a temporary file for the next step
+          echo "$promoted_files" > /tmp/promoted_files.txt
+          echo "Promoted files detected"
         else
           echo "changes=false" >> $GITHUB_OUTPUT
-          echo "No changes detected"
+          echo "No files to promote"
         fi
         
-    - name: Commit and push changes
-      if: steps.check-changes.outputs.changes == 'true'
+    - name: Commit and push promoted files
+      if: steps.promote.outputs.changes == 'true'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
@@ -39,20 +49,29 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Show what files will be committed
-        echo "Files to be committed:"
-        git status --short
-        
-        # Add all modified and new files (dune promote may create new test output files)
-        git add -A
-        
-        # Commit the changes
-        git commit -m "Auto-promote dune test changes"
-        
-        # Push to the current branch
-        git push origin HEAD
-        
-        echo "Changes committed and pushed successfully"
+        # Read the promoted files list
+        if [[ -f /tmp/promoted_files.txt ]]; then
+          echo "Files to be committed:"
+          cat /tmp/promoted_files.txt
+          
+          # Add only the promoted files
+          while IFS= read -r file; do
+            if [[ -n "$file" ]]; then
+              git add "$file"
+            fi
+          done < /tmp/promoted_files.txt
+          
+          # Commit the changes
+          git commit -m "Auto-promote dune test changes"
+          
+          # Push to the current branch
+          git push origin HEAD
+          
+          echo "Changes committed and pushed successfully"
+          
+          # Clean up
+          rm -f /tmp/promoted_files.txt
+        fi
 
 branding:
   icon: 'check-circle'

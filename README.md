@@ -1,11 +1,12 @@
 # ocaml-dune-promote-action
 
-A GitHub action for automatically running `dune test --auto-promote` and committing the resulting files to a pull request.
+A GitHub action for automatically running `dune promote` and committing only the promoted test files to a pull request.
 
 ## Features
 
-- Runs `dune test --auto-promote` to automatically fix test outputs
-- Detects and commits any modified files
+- Runs `dune test` followed by `dune promote` to fix test outputs
+- Parses dune promote output to identify exactly which files were promoted
+- Commits only the promoted files (not all changed files)
 - Pushes changes back to the PR branch
 - Triggers only when a PR comment contains `!dune-promote`
 
@@ -77,7 +78,7 @@ jobs:
    !dune-promote
    ```
 
-The action will automatically run `dune test --auto-promote`, commit any changes, and push them to the PR.
+The action will run `dune test`, then `dune promote` to fix any test output mismatches, and commit only the promoted files to the PR.
 
 ## Inputs
 
@@ -92,18 +93,21 @@ The action will automatically run `dune test --auto-promote`, commit any changes
 3. If triggered, it:
    - Checks out the PR branch
    - Sets up the OCaml environment
-   - Runs `dune test --auto-promote`
-   - Detects any file changes
-   - Commits and pushes the changes back to the PR (including new files created by dune promote)
+   - Runs `dune test` (which may fail with test mismatches)
+   - Runs `dune promote` and captures the output showing which files are promoted
+   - Commits and pushes only the promoted files back to the PR
 
 The example workflow also posts a success comment on the PR after the action completes.
 
-**Note**: The action uses `git add -A` to include both modified and newly created files, as dune promote may generate new test output files. Ensure your `.gitignore` is properly configured to exclude build artifacts and sensitive files.
+Example output from `dune promote`:
+```
+Promoting _build/default/test/test.exe.output to test/test.expected
+```
 
 ## Requirements
 
 - An OCaml project using Dune as the build system
-- Tests that can be promoted with `dune test --auto-promote`
+- Tests that can be promoted with `dune promote`
 - GitHub Actions enabled in your repository
 
 ## Permissions
